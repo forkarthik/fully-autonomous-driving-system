@@ -1,0 +1,128 @@
+================================================================================
+  HOW TO RUN - AUTONOMOUS DRIVING SYSTEM (ADAS)
+================================================================================
+  Detects: Vehicles (Car, Truck, Bus, Motorcycle, Bicycle)
+           Humans (Person)
+           Traffic Lights (Red / Yellow / Green color detection)
+           Stop Signs
+           Animals (Dog, Cat, Horse, Cow, Sheep, Bird, Bear, Elephant, Zebra, Giraffe)
+
+  Platform: NVIDIA Jetson Orin Nano (L4T R36)
+  Model:    YOLOv11n (TensorRT Engine) with GPU acceleration
+================================================================================
+
+--------------------------------------------------------------------------------
+1. QUICK START (Camera + No ESP32)
+--------------------------------------------------------------------------------
+   This is the simplest way to run the system with a USB/CSI camera:
+
+   $ cd "/home/smvec-eee/Desktop/fully autonomous driving system"
+   $ python3 autonomous_driving_system/main.py --source 0 --no-serial
+
+   - Opens camera index 0 (default USB camera)
+   - Detects vehicles, humans, animals, traffic lights in real-time
+   - Displays FPS, detection count, lane lines, and collision warnings
+   - Press 'q' in the OpenCV window to quit
+
+--------------------------------------------------------------------------------
+2. FULL MODE (Camera + ESP32 Motor Control)
+--------------------------------------------------------------------------------
+   Connect ESP32 via USB first, then:
+
+   $ python3 autonomous_driving_system/main.py --source 0 --serial-port /dev/ttyUSB0
+
+   - AI controls steering (lane keeping) and throttle (collision avoidance)
+   - Stops on RED LIGHT or CRITICAL collision warnings
+
+--------------------------------------------------------------------------------
+3. VIDEO FILE MODE
+--------------------------------------------------------------------------------
+   Process a dashcam video file instead of live camera:
+
+   $ python3 autonomous_driving_system/main.py --source autonomous_driving_system/driving.mp4 --no-serial
+
+--------------------------------------------------------------------------------
+4. STREAMLIT WEB INTERFACE
+--------------------------------------------------------------------------------
+   Visual control panel with live feed, manual sliders, and telemetry:
+
+   $ streamlit run app.py
+
+   - Open browser: http://localhost:8501
+   - Switch between Manual and Autonomous modes
+   - Requires ESP32 connected for motor control
+
+--------------------------------------------------------------------------------
+5. ALL COMMAND LINE OPTIONS
+--------------------------------------------------------------------------------
+   python3 autonomous_driving_system/main.py [OPTIONS]
+
+   --source        Camera index (0, 1) or video file path    [default: 0]
+   --output        Path to save output video (e.g. out.mp4)  [default: none]
+   --imgsz         Inference size (must match engine: 640)    [default: 640]
+   --device        Device: "0" (GPU), "cpu"                  [default: auto]
+   --fix-color     Fix camera color: 'bgr2rgb' or 'swap_rg'  [default: none]
+   --serial-port   ESP32 port (e.g. /dev/ttyUSB0)            [default: /dev/ttyUSB0]
+   --no-serial     Disable ESP32 serial (no motor control)
+
+   EXAMPLES:
+   # Camera with color fix and video recording:
+   $ python3 autonomous_driving_system/main.py --source 0 --no-serial --fix-color swap_rg --output output.mp4
+
+   # Process video on CPU:
+   $ python3 autonomous_driving_system/main.py --source video.mp4 --device cpu --no-serial
+
+--------------------------------------------------------------------------------
+6. WHAT IT DETECTS
+--------------------------------------------------------------------------------
+   CATEGORY          OBJECTS                         VISUALIZATION
+   ─────────────────────────────────────────────────────────────────
+   Vehicles          Car, Truck, Bus, Motorcycle,    Green box + distance (m)
+                     Bicycle                         + lane position [Left/Center/Right]
+   
+   People            Person                          Green box
+
+   Traffic Lights    Red, Yellow, Green              Colored box (Red/Yellow/Green)
+                                                     + WARNING on red
+
+   Road Signs        Stop Sign                       Green box + WARNING
+
+   Animals           Dog, Cat, Horse, Cow, Sheep,    Green box
+                     Bird, Bear, Elephant, Zebra,
+                     Giraffe
+
+   Lanes             Left/Right lane lines           Red overlay lines
+
+   Collision ROI     Trapezoid in front of vehicle   Green/Yellow/Red based on danger
+
+--------------------------------------------------------------------------------
+7. TROUBLESHOOTING
+--------------------------------------------------------------------------------
+   PROBLEM                                SOLUTION
+   ─────────────────────────────────────────────────────────────────
+   "No module named 'ultralytics'"        pip3 install --no-deps ultralytics
+   "No module named 'torch'"              Install PyTorch from NVIDIA wheel
+   Colors are wrong (blue/red swapped)    Add --fix-color swap_rg or --fix-color bgr2rgb
+   Serial permission denied               sudo chmod 666 /dev/ttyUSB0
+   TensorRT engine version mismatch       Delete .engine file, re-export with:
+                                           yolo export model=yolo11n.pt format=engine
+   Low FPS                                System uses frame skipping automatically.
+                                           Camera is set to 640x480 for speed.
+   Camera not found                       Try --source 1 or check with: ls /dev/video*
+
+--------------------------------------------------------------------------------
+8. PROJECT STRUCTURE
+--------------------------------------------------------------------------------
+   fully autonomous driving system/
+   ├── autonomous_driving_system/
+   │   ├── main.py                  # Main entry point (CLI mode)
+   │   ├── perception/
+   │   │   ├── object_detector.py   # YOLOv11 object detection
+   │   │   ├── lane_detector.py     # Hough Transform lane detection
+   │   │   └── collision_warning.py # Collision + traffic light analysis
+   │   └── utils/
+   │       └── serial_controller.py # ESP32 serial communication
+   ├── app.py                       # Streamlit web interface
+   ├── yolov8n.pt                   # Fallback YOLO model weights
+   └── HOW_TO_RUN.txt               # This file
+================================================================================

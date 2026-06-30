@@ -1,0 +1,9 @@
+# Core Dependencies for ADAS System
+# Note: On Jetson, install PyTorch/Torchvision using NVIDIA-provided wheels.
+
+numpy
+opencv-python
+pyserial
+streamlit
+ultralytics
+# pillow (optional, used by some perception modules)
