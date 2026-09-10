@@ -1,6 +1,13 @@
-from ultralytics import YOLO
+try:
+    from ultralytics import YOLO
+    import torch
+    HAS_YOLO = True
+except Exception as e:
+    HAS_YOLO = False
+    YOLO = None
+    torch = None
+
 import cv2
-import torch
 
 # ---------------------------------------------------------------------------
 #  Indian Road Class Mapping
@@ -31,12 +38,16 @@ INDIA_ROAD_CLASSES = [0, 1, 2, 3, 5, 7, 9, 11, 15, 16, 17, 18, 19, 20]
 class ObjectDetector:
     def __init__(self, model_path='yolo11n.pt'):
         print(f"Loading YOLO model from {model_path}...")
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        self.model = YOLO(model_path, task='detect')
         self.device = "unknown"
         self._is_engine = str(model_path).endswith('.engine')
+
+        if HAS_YOLO:
+            if torch is not None and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            self.model = YOLO(model_path, task='detect')
+        else:
+            print(f"[WARN] YOLO / PyTorch runtime unavailable in current host environment. Running fallback mode.")
+            self.model = None
 
     def detect(self, frame, imgsz=640, conf=0.35, iou=0.50, device=None, classes=None):
         """
@@ -46,22 +57,27 @@ class ObjectDetector:
             frame: Input image (BGR)
             imgsz: Inference size (640 recommended)
             conf:  Confidence threshold.
-                   0.35 gives higher recall (detects more objects including
-                   partially occluded ones common in Indian traffic) while
-                   still filtering pure noise.
             iou:   NMS IoU threshold — 0.50 suppresses overlapping duplicates
             device: 'cuda', 'cpu', '0', etc.
             classes: List of COCO class IDs to detect
         Returns the results object from ultralytics.
         """
+        if not HAS_YOLO or self.model is None:
+            # Fallback mock container for environments where PyTorch isn't available
+            class EmptyResults:
+                boxes = []
+                names = INDIA_CLASS_NAMES
+            return EmptyResults()
+
         if self._is_engine:
             device = 0 if device is None else device
             self.device = "GPU (TensorRT)"
         else:
-            self.device = str(device) if device else "Auto"
+            if device is None or device == '':
+                device = 0 if (torch and torch.cuda.is_available()) else 'cpu'
+            self.device = f"PyTorch ({device})"
 
-        if classes is None:
-            classes = INDIA_ROAD_CLASSES
+        classes = INDIA_ROAD_CLASSES if classes is None else classes
 
         results = self.model(
             frame,
@@ -70,12 +86,13 @@ class ObjectDetector:
             iou=iou,
             device=device,
             classes=classes,
+            agnostic_nms=True,   # Class-Agnostic NMS: suppresses duplicate bounding boxes
             verbose=False,
-            agnostic_nms=True,   # Prevents cross-class duplicates (bus+car on same object)
+            stream=False,
         )
         return results[0]
 
     @staticmethod
-    def get_india_name(cls_id, default_name='Unknown'):
-        """Get the Indian road context name for a COCO class ID."""
+    def get_india_name(cls_id, default_name=''):
+        """Convert standard COCO class name to Indian road context name."""
         return INDIA_CLASS_NAMES.get(cls_id, default_name)

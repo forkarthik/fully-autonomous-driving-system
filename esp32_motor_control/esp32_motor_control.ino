@@ -14,6 +14,7 @@
 #define EN_B 33        // Drive PWM
 #define IN3 14         // Drive Direction 1
 #define IN4 12         // Drive Direction 2
+#define BUZZER_PIN 4   // Piezo Buzzer / AEB Siren Pin
 
 // Sensor Pins
 #define TRIG_LEFT 5
@@ -66,6 +67,8 @@ void setup() {
   pinMode(IN4, OUTPUT);
   pinMode(EN_A, OUTPUT);
   pinMode(EN_B, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
   
   // Sensor pins
   pinMode(TRIG_LEFT, OUTPUT);
@@ -96,19 +99,20 @@ void setup() {
   server.on("/python", HTTP_POST, handlePython);
   
   server.begin();
-  Serial.println("Server started. Listening for Serial <ANGLE,SPEED>...");
+  Serial.println("Server started. Listening for Serial <ANGLE,SPEED> or <ANGLE,SPEED,ALARM>...");
 }
 
 void loop() {
   server.handleClient();
   readSensors();
   
-  // Failsafe check
+  // Failsafe check: if Jetson disconnects, cut power & alarm immediately
   if (millis() - lastCmdTime > TIMEOUT) {
     if (driveSpeed != 0 || steerAngle != 0) {
        stopMotors();
        driveSpeed = 0;
        steerAngle = 0;
+       digitalWrite(BUZZER_PIN, LOW);
     }
   }
 
@@ -136,19 +140,39 @@ void loop() {
 
 // ================= SERIAL COMMANDS =================
 void parseSerialCommand(String data) {
-  // Expected: "ANGLE,SPEED" (e.g. "90,100")
-  int commaIndex = data.indexOf(',');
-  if (commaIndex != -1) {
-    int angleInput = data.substring(0, commaIndex).toInt(); // 0-180
-    int speedInput = data.substring(commaIndex + 1).toInt(); // -255 to 255
+  // Expected: "ANGLE,SPEED" or "ANGLE,SPEED,ALARM" (e.g. "90,100,0" or "80,-30,2")
+  int firstComma = data.indexOf(',');
+  if (firstComma != -1) {
+    int angleInput = data.substring(0, firstComma).toInt(); // 0-180
+    int secondComma = data.indexOf(',', firstComma + 1);
+    int speedInput = 0;
+    int alarmLevel = 0;
+    
+    if (secondComma != -1) {
+      speedInput = data.substring(firstComma + 1, secondComma).toInt(); // -255 to 255
+      alarmLevel = data.substring(secondComma + 1).toInt(); // 0=none, 1=warning beep, 2=critical AEB siren
+    } else {
+      speedInput = data.substring(firstComma + 1).toInt();
+    }
     
     // Map Angle (0-180) to Steering PWM (-255 to 255)
     // 90 -> 0, 0 -> -255, 180 -> 255
     int steerPWM = map(angleInput, 0, 180, -255, 255);
     
-    // Apply
+    // Apply Motors
     setDriveMotor(speedInput);
     setSteerMotor(steerPWM);
+
+    // Apply Audible / Haptic Buzzer
+    if (alarmLevel >= 2) {
+      // Critical AEB Siren: rapid pulse
+      digitalWrite(BUZZER_PIN, (millis() % 200 < 100) ? HIGH : LOW);
+    } else if (alarmLevel == 1) {
+      // Warning beep: short periodic chirp
+      digitalWrite(BUZZER_PIN, (millis() % 600 < 120) ? HIGH : LOW);
+    } else {
+      digitalWrite(BUZZER_PIN, LOW);
+    }
     
     driveSpeed = speedInput;
     steerAngle = steerPWM;

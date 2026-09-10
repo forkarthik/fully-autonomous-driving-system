@@ -5,3 +5,5 @@
 venv/
 .venv/
 __pycache__/
+test_frame_*.jpg
+run_output.txt

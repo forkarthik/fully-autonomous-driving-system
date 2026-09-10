@@ -169,7 +169,10 @@ class LaneDetector:
         result = []
         if lines is not None:
             for line in lines:
-                x1, y1, x2, y2 = line[0]
+                coords = line.flatten()
+                if len(coords) < 4:
+                    continue
+                x1, y1, x2, y2 = int(coords[0]), int(coords[1]), int(coords[2]), int(coords[3])
                 if abs(x2 - x1) == 0:
                     continue
                 slope = (y2 - y1) / (x2 - x1)

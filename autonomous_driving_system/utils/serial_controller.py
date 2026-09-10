@@ -20,16 +20,17 @@ class SerialController:
         self.thread.start()
         return self
 
-    def send_command(self, angle, speed):
+    def send_command(self, angle, speed, alarm=0):
         """
         Send control command to ESP32.
         angle: 0-180 (90 center)
         speed: -255 to 255
+        alarm: 0=normal, 1=warning beep, 2=critical AEB siren
         """
         if not self.running: return
         
-        # Format: <ANGLE,SPEED>
-        cmd = f"<{int(angle)},{int(speed)}>"
+        # Format: <ANGLE,SPEED,ALARM>
+        cmd = f"<{int(angle)},{int(speed)},{int(alarm)}>"
         
         # Update latest command (overwrite old if queue full)
         if self.command_queue.full():
